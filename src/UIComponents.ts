@@ -1,4 +1,4 @@
-import { Animated } from "react-native";
+import Animated from "react-native-reanimated";
 import Styled, { css } from "styled-components/native";
 import { DotSize, TabButtonLayout, TabElementDisplayOptions } from "./types";
 import { isIphoneX } from "./utils/iPhoneX";

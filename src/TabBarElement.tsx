@@ -1,4 +1,5 @@
 // UI Components imports
+import React, { useEffect, useState } from "react";
 import {
   CommonActions,
   Descriptor,
@@ -7,9 +8,7 @@ import {
   Route,
   TabNavigationState,
 } from "@react-navigation/native";
-import React, { useEffect, useState } from "react";
 import {
-  Animated,
   BackHandler,
   Dimensions,
   I18nManager,
@@ -23,6 +22,12 @@ import ResourceSavingScene from "./ResourceSavingScene";
 import { IAppearanceOptions, TabElementDisplayOptions } from "./types";
 import { BottomTabBarWrapper, Dot, Label, TabButton } from "./UIComponents";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  useSharedValue,
+  withSpring,
+  useAnimatedStyle,
+  runOnJS,
+} from "react-native-reanimated";
 
 interface TabBarElementProps {
   state: TabNavigationState<Record<string, object | undefined>>;
@@ -80,36 +85,19 @@ export default ({
   } = tabBarOptions;
 
   // State
-  const [prevPos, setPrevPos] = useState(horizontalPadding);
-  const [pos, setPos] = useState(prevPos);
-  const [width, setWidth] = useState(0);
-  const [height, setHeight] = useState(0);
-  const [animatedPos] = useState(() => new Animated.Value(1));
-  const [loaded, setLoaded] = useState([state.index]);
+  const animatedPos = useSharedValue(horizontalPadding);
+  const prevPos = useSharedValue(horizontalPadding);
+  const width = useSharedValue(0);
+  const height = useSharedValue(0);
 
+  const [loaded, setLoaded] = useState([state.index]);
   const insets = useSafeAreaInsets();
+  const [isPortrait, setIsPortrait] = useState(true);
 
   useEffect(() => {
     const { index } = state;
     setLoaded(loaded.includes(index) ? loaded : [...loaded, index]);
   }, [state]);
-
-  // false = Portrait
-  // true = Landscape
-  const [isPortrait, setIsPortrait] = useState(true);
-
-  // Reset animation when changing screen orientation
-  Dimensions.addEventListener("change", () => {
-    if (
-      (isPortrait && !didChangeToPortrait()) ||
-      (!isPortrait && didChangeToPortrait())
-    ) {
-      setIsPortrait(!isPortrait);
-      animation(animatedPos).start(() => {
-        updatePrevPos();
-      });
-    }
-  });
 
   /**
    * @returns true if current orientation is Portrait, false otherwise
@@ -120,41 +108,26 @@ export default ({
   };
 
   /**
-   * Dot animation
-   * @param {*} val animation value
-   * @returns Animated.CompositeAnimation
-   * Use .start() to start the animation
-   */
-  const animation = (val: Animated.Value) =>
-    Animated.spring(val, {
-      toValue: 1,
-      useNativeDriver: false,
-    });
-
-  /**
    * Helper function that updates the previous position
    * of the tab to calculate the new position.
    */
   const updatePrevPos = () => {
-    setPos((pos) => {
-      setPrevPos(pos);
-      return pos;
-    });
+    prevPos.value = animatedPos.value;
   };
 
   /**
    * Handles physical button press for Android
    */
   const handleBackPress = () => {
-    animation(animatedPos).start(() => {
-      updatePrevPos();
+    animatedPos.value = withSpring(animatedPos.value, {}, () => {
+      runOnJS(updatePrevPos)();
     });
     return false;
   };
 
   useEffect(() => {
-    animation(animatedPos).start(() => {
-      updatePrevPos();
+    animatedPos.value = withSpring(animatedPos.value, {}, () => {
+      runOnJS(updatePrevPos)();
     });
     let backHandlerSubscription: NativeEventSubscription | undefined;
 
@@ -165,21 +138,25 @@ export default ({
       );
     }
 
+    const subscription = Dimensions.addEventListener("change", () => {
+      if (
+        (isPortrait && !didChangeToPortrait()) ||
+        (!isPortrait && didChangeToPortrait())
+      ) {
+        setIsPortrait(!isPortrait);
+        animatedPos.value = withSpring(animatedPos.value, {}, () => {
+          runOnJS(updatePrevPos)();
+        });
+      }
+    });
+
     return () => {
       if (Platform.OS === "android") {
         backHandlerSubscription?.remove();
       }
+      subscription?.remove();
     };
   }, []);
-
-  /**
-   * Animate whenever the navigation state changes
-   */
-  useEffect(() => {
-    animation(animatedPos).start(() => {
-      updatePrevPos();
-    });
-  }, [state.index]);
 
   // Compute activeBackgroundColor, if array provided, use array otherwise fallback to
   // default tabBarOptions property activeBackgroundColor (fallbacks for all unspecified tabs)
@@ -196,6 +173,20 @@ export default ({
       ? activeColors[state.index] || activeTintColor
       : activeColors
     : activeTintColor;
+
+  const animatedDotStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: I18nManager.isRTL
+            ? -animatedPos.value
+            : animatedPos.value,
+        },
+      ],
+      width: width.value,
+      height: height.value,
+    };
+  });
 
   /**
    * Create a tab button given a route and route index
@@ -266,10 +257,6 @@ export default ({
      * Emits an event to the navigation
      */
     const onPress = () => {
-      animation(animatedPos).start(() => {
-        updatePrevPos();
-      });
-
       const event = navigation.emit({
         type: "tabPress",
         target: route.key,
@@ -289,10 +276,6 @@ export default ({
      * Emits an event to the navigation
      */
     const onLongPress = () => {
-      animation(animatedPos).start(() => {
-        updatePrevPos();
-      });
-
       navigation.emit({
         type: "tabLongPress",
         target: route.key,
@@ -306,9 +289,12 @@ export default ({
      */
     const onLayout = (e: any) => {
       if (focused) {
-        setPos(e.nativeEvent.layout.x);
-        setWidth(e.nativeEvent.layout.width);
-        setHeight(e.nativeEvent.layout.height);
+        prevPos.value = animatedPos.value;
+        animatedPos.value = withSpring(e.nativeEvent.layout.x, {}, () => {
+          runOnJS(updatePrevPos)();
+        });
+        width.value = e.nativeEvent.layout.width;
+        height.value = e.nativeEvent.layout.height;
       }
     };
 
@@ -436,10 +422,7 @@ export default ({
       </View>
       {/* Tab Bar */}
       {tabBarVisible && (
-        <View
-          pointerEvents={"box-none"}
-          style={floating && overlayStyle}
-        >
+        <View pointerEvents={"box-none"} style={floating && overlayStyle}>
           <BottomTabBarWrapper
             style={tabStyle}
             floating={floating}
@@ -455,21 +438,7 @@ export default ({
               dotCornerRadius={dotCornerRadius}
               topPadding={topPadding}
               activeTabBackground={activeTabBackground}
-              style={
-                I18nManager.isRTL
-                  ? {
-                      right: animatedPos.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [prevPos, pos],
-                      }),
-                    }
-                  : {
-                      left: animatedPos.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [prevPos, pos],
-                      }),
-                    }
-              }
+              style={animatedDotStyle}
               width={width}
               height={height}
             />
