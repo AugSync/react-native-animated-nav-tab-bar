@@ -438,13 +438,13 @@ export default ({
       {tabBarVisible && (
         <View
           pointerEvents={"box-none"}
-          style={[floating && overlayStyle, { paddingBottom: insets.bottom }]}
+          style={floating && overlayStyle}
         >
           <BottomTabBarWrapper
             style={tabStyle}
             floating={floating}
             topPadding={topPadding}
-            bottomPadding={bottomPadding}
+            bottomPadding={bottomPadding + insets.bottom}
             horizontalPadding={horizontalPadding}
             tabBarBackground={tabBarBackground}
             shadow={shadow}
