@@ -22,14 +22,12 @@ import { ScreenContainer } from "react-native-screens";
 import ResourceSavingScene from "./ResourceSavingScene";
 import { IAppearanceOptions, TabElementDisplayOptions } from "./types";
 import { BottomTabBarWrapper, Dot, Label, TabButton } from "./UIComponents";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface TabBarElementProps {
   state: TabNavigationState<Record<string, object | undefined>>;
   navigation: any;
-  descriptors: Record<
-    string,
-    Descriptor<any, any, any>
-  >;
+  descriptors: Record<string, Descriptor<any, any, any>>;
   appearance: IAppearanceOptions;
   tabBarOptions?: any;
   lazy?: boolean;
@@ -88,6 +86,8 @@ export default ({
   const [height, setHeight] = useState(0);
   const [animatedPos] = useState(() => new Animated.Value(1));
   const [loaded, setLoaded] = useState([state.index]);
+
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const { index } = state;
@@ -156,10 +156,13 @@ export default ({
     animation(animatedPos).start(() => {
       updatePrevPos();
     });
-    let backHandlerSubscription:NativeEventSubscription|undefined;
+    let backHandlerSubscription: NativeEventSubscription | undefined;
 
     if (Platform.OS === "android") {
-      backHandlerSubscription = BackHandler.addEventListener("hardwareBackPress", handleBackPress);
+      backHandlerSubscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        handleBackPress
+      );
     }
 
     return () => {
@@ -433,7 +436,10 @@ export default ({
       </View>
       {/* Tab Bar */}
       {tabBarVisible && (
-        <View pointerEvents={"box-none"} style={floating && overlayStyle}>
+        <View
+          pointerEvents={"box-none"}
+          style={[floating && overlayStyle, { paddingBottom: insets.bottom }]}
+        >
           <BottomTabBarWrapper
             style={tabStyle}
             floating={floating}
