@@ -27,7 +27,14 @@ import {
   withSpring,
   useAnimatedStyle,
   runOnJS,
+  configureReanimatedLogger,
+  ReanimatedLogLevel,
 } from "react-native-reanimated";
+
+configureReanimatedLogger({
+  level: ReanimatedLogLevel.warn,
+  strict: false,
+});
 
 interface TabBarElementProps {
   state: TabNavigationState<Record<string, object | undefined>>;
