@@ -140,7 +140,6 @@ export default ({
       setPrevPos(pos);
       return pos;
     });
-    animatedPos.setValue(0);
   };
 
   /**
